@@ -4,5 +4,5 @@ numpy
 xgboost
 scikit-learn
 shap
-gdown
 gunicorn
+requests
