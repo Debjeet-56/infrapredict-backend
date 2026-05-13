@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 import joblib
 import numpy as np
-import gdown
 import os
+import requests
 
 app = Flask(__name__)
 
@@ -29,18 +29,39 @@ FILE_IDS = {
 
 os.makedirs('models', exist_ok=True)
 
-def download_models():
+def download_file(file_id, dest_path):
+    print(f"⏳ Downloading {dest_path}...")
+    session = requests.Session()
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    response = session.get(url, stream=True)
+
+    # Handle large file warning page
+    token = None
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            token = value
+            break
+
+    if token:
+        url = f"https://drive.google.com/uc?export=download&confirm={token}&id={file_id}"
+        response = session.get(url, stream=True)
+
+    with open(dest_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=32768):
+            if chunk:
+                f.write(chunk)
+    print(f"✅ {dest_path} done!")
+
+def download_all():
     for name, file_id in FILE_IDS.items():
         path = f'models/{name}.pkl'
         if not os.path.exists(path):
-            print(f"⏳ Downloading {name}...")
-            gdown.download(f'https://drive.google.com/uc?id={file_id}', path, quiet=False)
-            print(f"✅ {name} downloaded!")
+            download_file(file_id, path)
         else:
             print(f"✅ {name} already exists, skipping...")
 
-print("⏳ Downloading all models from Google Drive...")
-download_models()
+print("⏳ Downloading all files from Google Drive...")
+download_all()
 print("✅ All files ready!")
 
 # Load models
@@ -91,7 +112,6 @@ def predict():
     try:
         data = request.get_json()
 
-        # Encode categoricals
         text_columns = ['Project_Type', 'Terrain_Type', 'Region', 'Material_Cost_Volatility']
         for col in text_columns:
             if col in data:
